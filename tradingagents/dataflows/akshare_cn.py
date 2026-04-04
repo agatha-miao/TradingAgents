@@ -180,10 +180,13 @@ def get_global_news_akshare(
     curr_date: Annotated[str, "Current date in yyyy-mm-dd format"] = None,
     look_back_days: Annotated[int, "Number of days to look back"] = 7,
     limit: Annotated[int, "Maximum number of articles to return"] = 5,
+    *extra_args,
+    **extra_kwargs,
 ):
     return (
         "AKShare global news adapter placeholder. "
-        f"curr_date={curr_date}, look_back_days={look_back_days}, limit={limit}."
+        f"curr_date={curr_date}, look_back_days={look_back_days}, limit={limit}, "
+        f"extra_args={extra_args}, extra_kwargs={extra_kwargs}."
     )
 
 
