@@ -138,6 +138,27 @@ Alternatively, copy `.env.example` to `.env` and fill in your keys:
 cp .env.example .env
 ```
 
+#### No OpenAI API key?
+
+You can still run TradingAgents in two ways:
+
+1. Use another cloud provider key (Gemini / Claude / xAI / OpenRouter), then set:
+```python
+config["llm_provider"] = "google"      # or anthropic / xai / openrouter
+```
+
+2. Use local Ollama models (no cloud API key required):
+```bash
+ollama pull qwen3:8b
+```
+
+```python
+config["llm_provider"] = "ollama"
+config["backend_url"] = "http://localhost:11434/v1"
+config["deep_think_llm"] = "qwen3:8b"
+config["quick_think_llm"] = "qwen3:8b"
+```
+
 ### CLI Usage
 
 Launch the interactive CLI:
@@ -146,6 +167,19 @@ tradingagents          # installed command
 python -m cli.main     # alternative: run directly from source
 ```
 You will see a screen where you can select your desired tickers, analysis date, LLM provider, research depth, and more.
+
+When prompted with:
+
+```text
+Select Output Language
+```
+
+choose `Chinese (中文)` if you want Chinese analyst reports/final decision text.  
+You can also force it in config:
+
+```python
+config["output_language"] = "Chinese"
+```
 
 <p align="center">
   <img src="assets/cli/cli_init.png" width="100%" style="display: inline-block; margin: 0 2%;">

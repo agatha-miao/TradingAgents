@@ -176,8 +176,15 @@ def get_news_akshare(
     return f"AKShare news adapter placeholder for {ticker} from {start_date} to {end_date}."
 
 
-def get_global_news_akshare(start_date: str = None, end_date: str = None):
-    return f"AKShare global news adapter placeholder from {start_date} to {end_date}."
+def get_global_news_akshare(
+    curr_date: Annotated[str, "Current date in yyyy-mm-dd format"] = None,
+    look_back_days: Annotated[int, "Number of days to look back"] = 7,
+    limit: Annotated[int, "Maximum number of articles to return"] = 5,
+):
+    return (
+        "AKShare global news adapter placeholder. "
+        f"curr_date={curr_date}, look_back_days={look_back_days}, limit={limit}."
+    )
 
 
 def get_insider_transactions_akshare(
