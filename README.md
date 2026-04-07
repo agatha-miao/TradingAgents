@@ -285,6 +285,32 @@ For A-share symbols, input values such as `600519`, `000001`, `sh600519`, or `sz
 
 See `tradingagents/default_config.py` for all configuration options.
 
+### Daily Scan + Deep Dive + Email (Template)
+
+You can run the template pipeline at:
+
+```bash
+python scripts/daily_scan_pipeline.py \
+  --universe-source csv \
+  --universe-csv stock_universe.csv \
+  --top-k-scan 20 \
+  --top-k-deep 5 \
+  --recipients "you@example.com"
+```
+
+What it does:
+- Light scan for your universe (technical + fundamentals)
+- Picks top names for deep analysis via `TradingAgentsGraph`
+- Generates an overview HTML + per-ticker detail HTML reports
+- Optionally emails the overview (SMTP env vars)
+- Supports Supabase `public.companies` style universe loading and `scan_results` write-back with env configuration:
+  - `SUPABASE_URL`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `SUPABASE_UNIVERSE_TABLE` (default: `companies`)
+  - `SUPABASE_SCAN_RESULTS_TABLE` (default: `scan_results`)
+  - `SUPABASE_MARKET` (default: `CN_A`)
+  - `SUPABASE_TICKER_FIELD` (`code` or `ts_code`, default: `code`)
+
 ## Contributing
 
 We welcome contributions from the community! Whether it's fixing a bug, improving documentation, or suggesting a new feature, your input helps make this project better. If you are interested in this line of research, please consider joining our open-source financial AI research community [Tauric Research](https://tauric.ai/).

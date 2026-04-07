@@ -26,13 +26,66 @@ DEFAULT_CONFIG = {
     # Data vendor configuration
     # Category-level configuration (default for all tools in category)
     "data_vendors": {
-        "core_stock_apis": "yfinance",       # Options: alpha_vantage, yfinance, akshare
-        "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance, akshare
-        "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance, akshare
-        "news_data": "yfinance",             # Options: alpha_vantage, yfinance, akshare
+        "core_stock_apis": "akshare,yfinance,alpha_vantage",        # Ordered fallback list supported
+        "technical_indicators": "akshare,yfinance,alpha_vantage",   # Ordered fallback list supported
+        "fundamental_data": "akshare,yfinance,alpha_vantage",       # Ordered fallback list supported
+        "news_data": "akshare,yfinance,alpha_vantage",              # Ordered fallback list supported
     },
     # Tool-level configuration (takes precedence over category-level)
     "tool_vendors": {
         # Example: "get_stock_data": "alpha_vantage",  # Override category default
     },
+    # Preferred official domains for supplementary web search
+    "trusted_news_domains": [
+        # Official/company & regulator sources
+        "broadcom.com",
+        "microsoft.com",
+        "google.com",
+        "meta.com",
+        "aboutamazon.com",
+        "anthropic.com",
+        "tesla.com",
+        "openai.com",
+        "nvidia.com",
+        "amd.com",
+        "sec.gov",
+        # China exchange/official sources
+        "cninfo.com.cn",
+        "sse.com.cn",
+        "szse.cn",
+        # China A-share finance media
+        "yicai.com",
+        "yicaiglobal.com",
+        "cls.cn",
+        "stcn.com",
+        "cs.com.cn",
+        "cnstock.com",
+        "caixin.com",
+        # Global comprehensive finance
+        "reuters.com",
+        "apnews.com",
+        "bloomberg.com",
+        "ft.com",
+        "wsj.com",
+        "cnbc.com",
+        "nikkei.com",
+        "asia.nikkei.com",
+        # Global tech / AI / semiconductor
+        "theinformation.com",
+        "techcrunch.com",
+        "technologyreview.com",
+        "wired.com",
+        "axios.com",
+        "semiengineering.com",
+        "semi.org",
+        "semiconductors.org",
+        "spectrum.ieee.org",
+        "lightreading.com",
+        "datacenterdynamics.com",
+        # Aerospace
+        "spacenews.com",
+        "nasa.gov",
+        "esa.int",
+        "space.com",
+    ],
 }
