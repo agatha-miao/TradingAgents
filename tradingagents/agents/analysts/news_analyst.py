@@ -6,6 +6,7 @@ from tradingagents.agents.utils.agent_utils import (
     get_global_news,
     get_language_instruction,
     get_news,
+    web_search_news,
 )
 from tradingagents.dataflows.config import get_config
 
@@ -18,10 +19,12 @@ def create_news_analyst(llm):
         tools = [
             get_news,
             get_global_news,
+            web_search_news,
         ]
 
         system_message = (
             "You are a news researcher tasked with analyzing recent news and trends over the past week. Please write a comprehensive report of the current state of the world that is relevant for trading and macroeconomics. Use the available tools: get_news(query, start_date, end_date) for company-specific or targeted news searches, and get_global_news(curr_date, look_back_days, limit) for broader macroeconomic news. Provide specific, actionable insights with supporting evidence to help traders make informed decisions."
+            + " If evidence from vendor tools is sparse or contradictory, call web_search_news(query, days, limit) to fetch supplementary internet sources before concluding."
             + " Keep original Chinese news snippets as-is (do not translate away key wording) when citing evidence."
             + " For each key conclusion, attach at least one source snippet in original wording."
             + " Add a concise glossary section for domain terms when present (e.g., 增持/减持/回购/非经常损益), with one-line explanations."
