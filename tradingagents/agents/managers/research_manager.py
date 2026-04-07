@@ -33,6 +33,9 @@ Rationale: An explanation of why these arguments lead to your conclusion.
 Strategic Actions: Concrete steps for implementing the recommendation.
 Take into account your past mistakes on similar situations. Use these insights to refine your decision-making and ensure you are learning and improving. Present your analysis conversationally, as if speaking naturally, without special formatting. 
 
+For every core judgment, include at least one short evidence snippet in original wording from upstream analyst/news content (preserve Chinese wording when present).
+Add a compact terminology glossary for any domain terms you use (e.g., 增持/减持/回购/非经常损益), with one-line definitions.
+
 Here are your past reflections on mistakes:
 \"{past_memory_str}\"
 

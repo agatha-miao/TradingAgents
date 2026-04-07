@@ -26,10 +26,10 @@ DEFAULT_CONFIG = {
     # Data vendor configuration
     # Category-level configuration (default for all tools in category)
     "data_vendors": {
-        "core_stock_apis": "yfinance",       # Options: alpha_vantage, yfinance, akshare
-        "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance, akshare
-        "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance, akshare
-        "news_data": "yfinance",             # Options: alpha_vantage, yfinance, akshare
+        "core_stock_apis": "akshare,yfinance,alpha_vantage",        # Ordered fallback list supported
+        "technical_indicators": "akshare,yfinance,alpha_vantage",   # Ordered fallback list supported
+        "fundamental_data": "akshare,yfinance,alpha_vantage",       # Ordered fallback list supported
+        "news_data": "akshare,yfinance,alpha_vantage",              # Ordered fallback list supported
     },
     # Tool-level configuration (takes precedence over category-level)
     "tool_vendors": {
