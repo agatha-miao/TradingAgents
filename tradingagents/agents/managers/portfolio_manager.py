@@ -42,6 +42,8 @@ def create_portfolio_manager(llm, memory):
 1. **Rating**: State one of Buy / Overweight / Hold / Underweight / Sell.
 2. **Executive Summary**: A concise action plan covering entry strategy, position sizing, key risk levels, and time horizon.
 3. **Investment Thesis**: Detailed reasoning anchored in the analysts' debate and past reflections.
+4. **Evidence Snippets (Original Wording)**: For each key conclusion, quote at least one short source snippet from analyst/news materials, preserving original language wording (especially Chinese headlines/sentences).
+5. **Terminology Glossary**: If finance-domain terms appear (e.g., 增持/减持/回购/非经常损益), provide one-line definitions for each used term.
 
 ---
 
