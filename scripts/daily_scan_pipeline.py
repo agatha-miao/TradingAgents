@@ -8,9 +8,11 @@ wire your own DB credentials/schema after local testing.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import re
+import signal
 import smtplib
 import time
 from dataclasses import dataclass
@@ -32,6 +34,25 @@ from tradingagents.llm_clients import create_llm_client
 
 
 load_dotenv()
+
+
+@contextlib.contextmanager
+def _time_limit(seconds: int):
+    """Raise TimeoutError if code block exceeds `seconds` (Unix only)."""
+    if seconds <= 0 or not hasattr(signal, "SIGALRM"):
+        yield
+        return
+
+    def _handle_timeout(signum, frame):  # type: ignore[unused-argument]
+        raise TimeoutError(f"operation timed out after {seconds}s")
+
+    prev_handler = signal.signal(signal.SIGALRM, _handle_timeout)
+    signal.setitimer(signal.ITIMER_REAL, float(seconds))
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0.0)
+        signal.signal(signal.SIGALRM, prev_handler)
 
 
 @dataclass
@@ -307,6 +328,7 @@ def run_deep_dive(
     if out_dir is not None:
         partial_dir = out_dir / "partial_llm_outputs"
         partial_dir.mkdir(parents=True, exist_ok=True)
+    timeout_seconds = int(os.getenv("DEEP_DIVE_TIMEOUT_SECONDS", "1200"))
     total_items = len(top_tickers)
     for idx, t in enumerate(top_tickers, 1):
         started = time.monotonic()
@@ -320,6 +342,37 @@ def run_deep_dive(
             print(f"[DeepDive] partial output persisted: {partial_path}", flush=True)
         elapsed = time.monotonic() - started
         print(f"[DeepDive] ({idx}/{total_items}) done ticker={t} elapsed={elapsed:.1f}s", flush=True)
+        try:
+            with _time_limit(timeout_seconds):
+                _, decision = ta.propagate(t, trade_date)
+            reports[t] = _polish_chinese_report(str(decision), t, config)
+            elapsed = time.monotonic() - started
+            print(f"[DeepDive] ({idx}/{total_items}) done ticker={t} elapsed={elapsed:.1f}s", flush=True)
+        except TimeoutError:
+            elapsed = time.monotonic() - started
+            reports[t] = (
+                "审校结论：本次深度分析超时，已跳过该标的。\n\n"
+                "润色后报告：\n"
+                f"- ticker: {t}\n"
+                f"- trade_date: {trade_date}\n"
+                f"- status: timeout_after_{timeout_seconds}s"
+            )
+            print(
+                f"[DeepDive] ({idx}/{total_items}) timeout ticker={t} elapsed={elapsed:.1f}s "
+                f"timeout={timeout_seconds}s",
+                flush=True,
+            )
+        except Exception as exc:
+            elapsed = time.monotonic() - started
+            reports[t] = (
+                "审校结论：本次深度分析异常，已跳过该标的。\n\n"
+                "润色后报告：\n"
+                f"- ticker: {t}\n"
+                f"- trade_date: {trade_date}\n"
+                f"- status: error\n"
+                f"- reason: {exc}"
+            )
+            print(f"[DeepDive] ({idx}/{total_items}) error ticker={t} elapsed={elapsed:.1f}s err={exc}", flush=True)
     return reports
 
 
