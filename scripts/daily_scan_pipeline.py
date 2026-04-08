@@ -12,6 +12,7 @@ import json
 import os
 import re
 import smtplib
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
@@ -239,8 +240,11 @@ def _polish_chinese_report(report_text: str, ticker: str, config: Dict[str, Any]
 
 def run_light_scan(universe_items: List[UniverseItem], trade_date: str) -> List[ScanResult]:
     results: List[ScanResult] = []
-    for item in universe_items:
+    total_items = len(universe_items)
+    for idx, item in enumerate(universe_items, 1):
         ticker = item.ticker
+        started = time.monotonic()
+        print(f"[LightScan] ({idx}/{total_items}) start ticker={ticker}", flush=True)
         try:
             ts, tr = _score_technical(ticker, trade_date)
             fs, fr = _score_fundamentals(ticker, trade_date)
@@ -259,6 +263,11 @@ def run_light_scan(universe_items: List[UniverseItem], trade_date: str) -> List[
                     themed_news=news,
                 )
             )
+            elapsed = time.monotonic() - started
+            print(
+                f"[LightScan] ({idx}/{total_items}) done ticker={ticker} score={total:.3f} elapsed={elapsed:.1f}s",
+                flush=True,
+            )
         except Exception as exc:
             results.append(
                 ScanResult(
@@ -273,10 +282,20 @@ def run_light_scan(universe_items: List[UniverseItem], trade_date: str) -> List[
                     themed_news=[],
                 )
             )
+            elapsed = time.monotonic() - started
+            print(
+                f"[LightScan] ({idx}/{total_items}) error ticker={ticker} elapsed={elapsed:.1f}s err={exc}",
+                flush=True,
+            )
     return sorted(results, key=lambda x: x.total_score, reverse=True)
 
 
-def run_deep_dive(top_tickers: List[str], trade_date: str, config: Dict) -> Dict[str, str]:
+def run_deep_dive(
+    top_tickers: List[str],
+    trade_date: str,
+    config: Dict,
+    out_dir: Path | None = None,
+) -> Dict[str, str]:
     # Keep fundamentals/news in deep dive; technical remains weighted in scan stage.
     ta = TradingAgentsGraph(
         debug=False,
@@ -284,9 +303,23 @@ def run_deep_dive(top_tickers: List[str], trade_date: str, config: Dict) -> Dict
         selected_analysts=["market", "news", "fundamentals"],
     )
     reports: Dict[str, str] = {}
-    for t in top_tickers:
+    partial_dir: Path | None = None
+    if out_dir is not None:
+        partial_dir = out_dir / "partial_llm_outputs"
+        partial_dir.mkdir(parents=True, exist_ok=True)
+    total_items = len(top_tickers)
+    for idx, t in enumerate(top_tickers, 1):
+        started = time.monotonic()
+        print(f"[DeepDive] ({idx}/{total_items}) start ticker={t}", flush=True)
         _, decision = ta.propagate(t, trade_date)
-        reports[t] = _polish_chinese_report(str(decision), t, config)
+        polished = _polish_chinese_report(str(decision), t, config)
+        reports[t] = polished
+        if partial_dir is not None:
+            partial_path = partial_dir / f"{idx:02d}_{t}.md"
+            partial_path.write_text(polished, encoding="utf-8")
+            print(f"[DeepDive] partial output persisted: {partial_path}", flush=True)
+        elapsed = time.monotonic() - started
+        print(f"[DeepDive] ({idx}/{total_items}) done ticker={t} elapsed={elapsed:.1f}s", flush=True)
     return reports
 
 
@@ -514,21 +547,45 @@ def main():
     parser.add_argument("--recipients", type=str, default=os.getenv("REPORT_RECIPIENTS", ""))
     args = parser.parse_args()
 
+    print("[Pipeline] Starting daily scan pipeline", flush=True)
+    print(
+        f"[Pipeline] Params: trade_date={args.trade_date}, universe_source={args.universe_source}, "
+        f"top_k_scan={args.top_k_scan}, top_k_deep={args.top_k_deep}, out_dir={args.out_dir}",
+        flush=True,
+    )
+
     if args.universe_source == "supabase":
         universe_items = load_universe_from_supabase()
     else:
         universe_items = load_universe_from_csv(args.universe_csv)
+    print(f"[Pipeline] Universe loaded: {len(universe_items)} tickers", flush=True)
 
     config = DEFAULT_CONFIG.copy()
     config["output_language"] = "Chinese"
-
-    scan_results = run_light_scan(universe_items, args.trade_date)
-    top_scan = scan_results[: args.top_k_scan]
-    top_tickers = [r.ticker for r in top_scan[: args.top_k_deep]]
-    deep_reports = run_deep_dive(top_tickers, args.trade_date, config)
+    print("[Pipeline] Light scan started", flush=True)
 
     out_dir = Path(args.out_dir) / args.trade_date
+    out_dir.mkdir(parents=True, exist_ok=True)
+    print(f"[Pipeline] Output directory prepared: {out_dir}", flush=True)
+
+    scan_results = run_light_scan(universe_items, args.trade_date)
+    print(f"[Pipeline] Light scan done: total_results={len(scan_results)}", flush=True)
+    light_scan_path = out_dir / "light_scan_results.json"
+    light_scan_path.write_text(
+        json.dumps([r.__dict__ for r in scan_results], ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    print(f"[Pipeline] Light scan snapshot persisted: {light_scan_path}", flush=True)
+    top_scan = scan_results[: args.top_k_scan]
+    top_tickers = [r.ticker for r in top_scan[: args.top_k_deep]]
+    print(f"[Pipeline] Deep dive targets: {top_tickers}", flush=True)
+    deep_reports = run_deep_dive(top_tickers, args.trade_date, config, out_dir=out_dir)
+    print(f"[Pipeline] Deep dive done: generated_reports={len(deep_reports)}", flush=True)
     overview_path, detail_paths = render_reports(top_scan, deep_reports, out_dir, args.top_k_deep)
+    print(
+        f"[Pipeline] Render done: overview={overview_path}, detail_count={len(detail_paths)}",
+        flush=True,
+    )
 
     # Optional: send email
     recipients = [e.strip() for e in args.recipients.split(",") if e.strip()]
@@ -542,11 +599,13 @@ def main():
         top_k_scan=args.top_k_scan,
         top_k_deep=args.top_k_deep,
     )
+    print("[Pipeline] Supabase write-back stage finished", flush=True)
 
     # Persist machine-readable scan output
     out_json = out_dir / "scan_results.json"
     out_json.write_text(json.dumps([r.__dict__ for r in scan_results], ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Done. Overview: {overview_path}")
+    print(f"[Pipeline] JSON persisted: {out_json}", flush=True)
+    print(f"Done. Overview: {overview_path}", flush=True)
 
 
 if __name__ == "__main__":

@@ -2,10 +2,13 @@ import os
 import requests
 import pandas as pd
 import json
+import time
 from datetime import datetime
 from io import StringIO
 
 API_BASE_URL = "https://www.alphavantage.co/query"
+REQUEST_TIMEOUT_SECONDS = float(os.getenv("ALPHA_VANTAGE_TIMEOUT_SECONDS", "30"))
+MAX_RETRIES = int(os.getenv("ALPHA_VANTAGE_MAX_RETRIES", "3"))
 
 def get_api_key() -> str:
     """Retrieve the API key for Alpha Vantage from environment variables."""
@@ -63,8 +66,29 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
         # Remove entitlement if it's None or empty
         api_params.pop("entitlement", None)
     
-    response = requests.get(API_BASE_URL, params=api_params)
-    response.raise_for_status()
+    last_error: Exception | None = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            response = requests.get(API_BASE_URL, params=api_params, timeout=REQUEST_TIMEOUT_SECONDS)
+            response.raise_for_status()
+            break
+        except requests.exceptions.Timeout as exc:
+            last_error = exc
+            wait_seconds = min(2 ** attempt, 8)
+            print(
+                f"[AlphaVantage] timeout on {function_name} (attempt {attempt}/{MAX_RETRIES}), "
+                f"retry in {wait_seconds}s."
+            )
+            if attempt < MAX_RETRIES:
+                time.sleep(wait_seconds)
+        except requests.exceptions.RequestException as exc:
+            last_error = exc
+            raise
+    else:
+        raise requests.exceptions.Timeout(
+            f"Alpha Vantage request timed out after {MAX_RETRIES} attempts "
+            f"(timeout={REQUEST_TIMEOUT_SECONDS}s) for function={function_name}"
+        ) from last_error
 
     response_text = response.text
     
