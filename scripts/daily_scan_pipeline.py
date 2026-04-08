@@ -8,9 +8,11 @@ wire your own DB credentials/schema after local testing.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import re
+import signal
 import smtplib
 import time
 from dataclasses import dataclass
@@ -32,6 +34,25 @@ from tradingagents.llm_clients import create_llm_client
 
 
 load_dotenv()
+
+
+@contextlib.contextmanager
+def _time_limit(seconds: int):
+    """Raise TimeoutError if code block exceeds `seconds` (Unix only)."""
+    if seconds <= 0 or not hasattr(signal, "SIGALRM"):
+        yield
+        return
+
+    def _handle_timeout(signum, frame):  # type: ignore[unused-argument]
+        raise TimeoutError(f"operation timed out after {seconds}s")
+
+    prev_handler = signal.signal(signal.SIGALRM, _handle_timeout)
+    signal.setitimer(signal.ITIMER_REAL, float(seconds))
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0.0)
+        signal.signal(signal.SIGALRM, prev_handler)
 
 
 @dataclass
@@ -298,14 +319,42 @@ def run_deep_dive(top_tickers: List[str], trade_date: str, config: Dict) -> Dict
         selected_analysts=["market", "news", "fundamentals"],
     )
     reports: Dict[str, str] = {}
+    timeout_seconds = int(os.getenv("DEEP_DIVE_TIMEOUT_SECONDS", "1200"))
     total_items = len(top_tickers)
     for idx, t in enumerate(top_tickers, 1):
         started = time.monotonic()
         print(f"[DeepDive] ({idx}/{total_items}) start ticker={t}", flush=True)
-        _, decision = ta.propagate(t, trade_date)
-        reports[t] = _polish_chinese_report(str(decision), t, config)
-        elapsed = time.monotonic() - started
-        print(f"[DeepDive] ({idx}/{total_items}) done ticker={t} elapsed={elapsed:.1f}s", flush=True)
+        try:
+            with _time_limit(timeout_seconds):
+                _, decision = ta.propagate(t, trade_date)
+            reports[t] = _polish_chinese_report(str(decision), t, config)
+            elapsed = time.monotonic() - started
+            print(f"[DeepDive] ({idx}/{total_items}) done ticker={t} elapsed={elapsed:.1f}s", flush=True)
+        except TimeoutError:
+            elapsed = time.monotonic() - started
+            reports[t] = (
+                "审校结论：本次深度分析超时，已跳过该标的。\n\n"
+                "润色后报告：\n"
+                f"- ticker: {t}\n"
+                f"- trade_date: {trade_date}\n"
+                f"- status: timeout_after_{timeout_seconds}s"
+            )
+            print(
+                f"[DeepDive] ({idx}/{total_items}) timeout ticker={t} elapsed={elapsed:.1f}s "
+                f"timeout={timeout_seconds}s",
+                flush=True,
+            )
+        except Exception as exc:
+            elapsed = time.monotonic() - started
+            reports[t] = (
+                "审校结论：本次深度分析异常，已跳过该标的。\n\n"
+                "润色后报告：\n"
+                f"- ticker: {t}\n"
+                f"- trade_date: {trade_date}\n"
+                f"- status: error\n"
+                f"- reason: {exc}"
+            )
+            print(f"[DeepDive] ({idx}/{total_items}) error ticker={t} elapsed={elapsed:.1f}s err={exc}", flush=True)
     return reports
 
 
@@ -354,6 +403,27 @@ def render_reports(
     """
     overview.write_text(overview_html, encoding="utf-8")
     return overview, details
+
+
+def write_rank_logs(scan_results: List[ScanResult], out_dir: Path) -> Path:
+    """
+    Persist full-universe technical ranking logs for observability.
+    """
+    logs_dir = out_dir / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    log_path = logs_dir / "technical_ranking_all.csv"
+
+    ranked = sorted(scan_results, key=lambda x: x.technical_score, reverse=True)
+    lines = [
+        "rank,ticker,technical_score,fundamental_score,total_score,rationale"
+    ]
+    for idx, r in enumerate(ranked, 1):
+        rationale = (r.rationale or "").replace('"', '""').replace("\n", " ")
+        lines.append(
+            f'{idx},{r.ticker},{r.technical_score:.6f},{r.fundamental_score:.6f},{r.total_score:.6f},"{rationale}"'
+        )
+    log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return log_path
 
 
 def send_email(overview_path: Path, details: Dict[str, Path], recipients: List[str]) -> None:
@@ -547,6 +617,7 @@ def main():
     deep_reports = run_deep_dive(top_tickers, args.trade_date, config)
 
     out_dir = Path(args.out_dir) / args.trade_date
+    rank_log_path = write_rank_logs(scan_results, out_dir)
     overview_path, detail_paths = render_reports(top_scan, deep_reports, out_dir, args.top_k_deep)
 
     # Optional: send email
@@ -565,6 +636,7 @@ def main():
     # Persist machine-readable scan output
     out_json = out_dir / "scan_results.json"
     out_json.write_text(json.dumps([r.__dict__ for r in scan_results], ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Technical ranking log: {rank_log_path}")
     print(f"Done. Overview: {overview_path}")
 
 
