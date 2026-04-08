@@ -26,6 +26,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install .
+          pip install supabase
       - name: Run pipeline
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -45,8 +46,28 @@ jobs:
           SMTP_SENDER: ${{ secrets.SMTP_SENDER }}
           REPORT_RECIPIENTS: ${{ secrets.REPORT_RECIPIENTS }}
         run: |
+          mkdir -p generated_logs
+          set -o pipefail
           python scripts/daily_scan_pipeline.py \
             --universe-source csv \
             --universe-csv stock_universe.csv \
             --top-k-scan 20 \
-            --top-k-deep 5
+            --top-k-deep 1 \
+            --out-dir generated_reports \
+            2>&1 | tee generated_logs/daily_scan_${{ github.run_id }}.log
+      - name: Upload daily reports artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-reports-${{ github.run_id }}
+          path: generated_reports/**
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Upload pipeline logs artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-scan-logs-${{ github.run_id }}
+          path: generated_logs/**
+          if-no-files-found: warn
+          retention-days: 14

@@ -311,6 +311,49 @@ What it does:
   - `SUPABASE_MARKET` (default: `CN_A`)
   - `SUPABASE_TICKER_FIELD` (`code` or `ts_code`, default: `code`)
 
+### Report API + Contextual QA (DeepSeek)
+
+For a single-user web frontend, you can serve Supabase reports and contextual QA with:
+
+```bash
+tradingagents-api
+```
+
+Required env vars:
+
+- Supabase:
+  - `SUPABASE_URL`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+- DeepSeek:
+  - `DEEPSEEK_API_KEY`
+  - optional: `DEEPSEEK_BASE_URL` (default: `https://api.deepseek.com`)
+  - optional: `DEEPSEEK_MODEL` (default: `deepseek-chat`)
+
+Available endpoints:
+
+- `GET /` (single-user web home)
+- `GET /reports` (single-user report list page)
+- `GET /reports/{report_id}/view` (report detail + contextual QA page)
+- `GET /health`
+- `GET /api/reports?limit=20`
+- `GET /api/reports/{report_id}`
+- `GET /api/reports/{report_id}/items`
+- `GET /api/tickers/{ticker}/latest`
+- `POST /api/qa/ask`
+- `POST /api/sim/run-daily` (generate auto BUY orders from Agent conclusions + pre-trade audit)
+- `GET /api/sim/orders`
+
+`/api/qa/ask` is *contextual QA* (not zero-context generation):
+- Frontend passes `report_id`, `ticker`, and `question`
+- API fetches report + matching report items for the selected ticker
+- DeepSeek answers strictly based on that report context
+
+`/api/sim/run-daily` is a single-user simulation helper:
+- Auto-selects top-N tickers from `output_report_items` scores
+- Creates BUY orders from Agent conclusions
+- Runs a pre-trade audit (`cooldown_days`) to avoid frequent re-trading same ticker
+- Writes approved rows to `sim_orders`, rejected rows to `sim_order_audits`
+
 ## Contributing
 
 We welcome contributions from the community! Whether it's fixing a bug, improving documentation, or suggesting a new feature, your input helps make this project better. If you are interested in this line of research, please consider joining our open-source financial AI research community [Tauric Research](https://tauric.ai/).
