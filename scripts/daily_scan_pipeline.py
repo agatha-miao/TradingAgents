@@ -12,6 +12,7 @@ import json
 import os
 import re
 import smtplib
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
@@ -239,8 +240,11 @@ def _polish_chinese_report(report_text: str, ticker: str, config: Dict[str, Any]
 
 def run_light_scan(universe_items: List[UniverseItem], trade_date: str) -> List[ScanResult]:
     results: List[ScanResult] = []
-    for item in universe_items:
+    total_items = len(universe_items)
+    for idx, item in enumerate(universe_items, 1):
         ticker = item.ticker
+        started = time.monotonic()
+        print(f"[LightScan] ({idx}/{total_items}) start ticker={ticker}", flush=True)
         try:
             ts, tr = _score_technical(ticker, trade_date)
             fs, fr = _score_fundamentals(ticker, trade_date)
@@ -259,6 +263,11 @@ def run_light_scan(universe_items: List[UniverseItem], trade_date: str) -> List[
                     themed_news=news,
                 )
             )
+            elapsed = time.monotonic() - started
+            print(
+                f"[LightScan] ({idx}/{total_items}) done ticker={ticker} score={total:.3f} elapsed={elapsed:.1f}s",
+                flush=True,
+            )
         except Exception as exc:
             results.append(
                 ScanResult(
@@ -273,6 +282,11 @@ def run_light_scan(universe_items: List[UniverseItem], trade_date: str) -> List[
                     themed_news=[],
                 )
             )
+            elapsed = time.monotonic() - started
+            print(
+                f"[LightScan] ({idx}/{total_items}) error ticker={ticker} elapsed={elapsed:.1f}s err={exc}",
+                flush=True,
+            )
     return sorted(results, key=lambda x: x.total_score, reverse=True)
 
 
@@ -284,9 +298,14 @@ def run_deep_dive(top_tickers: List[str], trade_date: str, config: Dict) -> Dict
         selected_analysts=["market", "news", "fundamentals"],
     )
     reports: Dict[str, str] = {}
-    for t in top_tickers:
+    total_items = len(top_tickers)
+    for idx, t in enumerate(top_tickers, 1):
+        started = time.monotonic()
+        print(f"[DeepDive] ({idx}/{total_items}) start ticker={t}", flush=True)
         _, decision = ta.propagate(t, trade_date)
         reports[t] = _polish_chinese_report(str(decision), t, config)
+        elapsed = time.monotonic() - started
+        print(f"[DeepDive] ({idx}/{total_items}) done ticker={t} elapsed={elapsed:.1f}s", flush=True)
     return reports
 
 
